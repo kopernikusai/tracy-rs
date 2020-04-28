@@ -1,7 +1,10 @@
 [package]
 name = "tracy-rs"
-version = "0.0.1"
-authors = ["Alexander 'z33ky' Hirsch <1zeeky@gmail.com>"]
+version = "0.1.0"
+authors = [
+  "Alexander 'z33ky' Hirsch <1zeeky@gmail.com>",
+  "Chip Collier <chip@kopernikusauto.com>"
+]
 edition = "2018"
 
 [build-dependencies]
@@ -11,8 +14,9 @@ cc = "1.0"
 libc = "0.2.60"
 
 [features]
-default = ["enable"]
+default = []
 enable = []
 no_exit = []
 on_demand = []
 dll = []
+nightly = []
