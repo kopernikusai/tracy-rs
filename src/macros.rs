@@ -74,7 +74,7 @@ macro_rules! src_loc_data {
 #[macro_export]
 macro_rules! zone {
     ($active: expr) => {
-        let _zone = ZoneContext::new(&$crate::src_loc_data!(), $active);
+        let _zone = $crate::ZoneContext::new(&$crate::src_loc_data!(), $active);
     };
 }
 
@@ -105,7 +105,7 @@ macro_rules! zone_nc {
 #[macro_export]
 macro_rules! zone_s {
     ($depth: expr, $active: expr) => {
-        let _zone = ZoneContext::with_callstack(&$crate::src_loc_data!(), $depth, $active);
+        let _zone = $crate::ZoneContext::with_callstack(&$crate::src_loc_data!(), $depth, $active);
     };
 }
 
