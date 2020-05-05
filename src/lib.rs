@@ -1,6 +1,5 @@
-#![allow(unused)]
-
 //#![feature(const_cstr_unchecked)]
+#![allow(unused)]
 
 use std::{ffi::CStr, marker::PhantomData, mem::ManuallyDrop};
 
@@ -14,10 +13,12 @@ mod macros;
 pub use macros::*;
 
 pub type ColorType = u32;
-mod colors;
+pub mod colors;
 
 pub mod sys {
-    use libc::{c_char, c_int, c_void, size_t};
+    #![allow(non_camel_case_types)]
+    pub use libc::{c_char, c_int, size_t};
+    pub use std::ffi::c_void;
 
     #[repr(C)]
     pub struct source_location_data {
@@ -46,8 +47,16 @@ pub mod sys {
             active: c_int,
         ) -> zone_context;
         pub fn ___tracy_emit_zone_end(ctx: zone_context);
-        pub fn ___tracy_emit_zone_text(ctx: zone_context, txt: *const c_char, size: size_t);
-        pub fn ___tracy_emit_zone_name(ctx: zone_context, txt: *const c_char, size: size_t);
+        pub fn ___tracy_emit_zone_text(
+            ctx: zone_context,
+            txt: *const c_char,
+            size: size_t,
+        );
+        pub fn ___tracy_emit_zone_name(
+            ctx: zone_context,
+            txt: *const c_char,
+            size: size_t,
+        );
 
         pub fn ___tracy_emit_frame_mark(name: *const c_char);
         pub fn ___tracy_emit_frame_mark_start(name: *const c_char);
@@ -63,26 +72,28 @@ pub mod sys {
     }
 }
 
-//FIXME: figure out if 'a is fine enough, or if we need 'static
-pub struct SourceLocation<'a> {
-    pub function: &'a CStr,
-    pub file: &'a CStr,
+pub struct SourceLocation {
+    pub function: &'static str,
+    pub file: &'static str,
     pub line: u32,
 }
 
-pub struct ZoneContext<'a> {
+pub struct ZoneContext {
     context: ManuallyDrop<sys::zone_context>,
-    marker: PhantomData<SourceLocationData<'a>>,
+    marker: PhantomData<SourceLocationData>,
 }
 
 pub type CallstackDepth = libc::c_int;
 
-impl<'a> ZoneContext<'a> {
+impl<'a> ZoneContext {
     #[inline]
-    pub fn new(loc: &SourceLocationData<'a>, active: bool) -> Self {
+    pub fn new(loc: &SourceLocationData, active: bool) -> Self {
         Self {
             context: ManuallyDrop::new(unsafe {
-                sys::___tracy_emit_zone_begin(&loc.data as *const _, if active { 1 } else { 0 })
+                sys::___tracy_emit_zone_begin(
+                    &loc.data as *const _,
+                    if active { 1 } else { 0 },
+                )
             }),
             marker: PhantomData,
         }
@@ -90,7 +101,7 @@ impl<'a> ZoneContext<'a> {
 
     #[inline]
     pub fn with_callstack(
-        loc: &SourceLocationData<'a>,
+        loc: &SourceLocationData,
         depth: CallstackDepth,
         active: bool,
     ) -> Self {
@@ -107,32 +118,34 @@ impl<'a> ZoneContext<'a> {
     }
 }
 
-impl Drop for ZoneContext<'_> {
+impl Drop for ZoneContext {
     #[inline]
     fn drop(&mut self) {
         //we could avoid this unsafe by manually copying (or deriving Close, though that doesn't
         //seem useful outside this specific use-case), but this is obviously safe also.
-        unsafe { sys::___tracy_emit_zone_end(ManuallyDrop::take(&mut self.context)) };
+        unsafe {
+            sys::___tracy_emit_zone_end(ManuallyDrop::take(&mut self.context))
+        };
     }
 }
 
-pub struct SourceLocationData<'a> {
+pub struct SourceLocationData {
     data: sys::source_location_data,
-    marker: PhantomData<&'a CStr>,
+    marker: PhantomData<&'static str>,
 }
 
-impl<'a> SourceLocationData<'a> {
+impl<'a> SourceLocationData {
     #[inline]
     pub const fn with_name_and_color(
-        loc: &SourceLocation<'a>,
-        name: &'a CStr,
+        loc: &SourceLocation,
+        name: &'static str,
         color: ColorType,
     ) -> Self {
         Self {
             data: sys::source_location_data {
-                name: name.as_ptr(),
-                function: loc.function.as_ptr(),
-                file: loc.file.as_ptr(),
+                name: unsafe { name.as_ptr() as *const sys::c_char },
+                function: loc.function.as_ptr() as *const sys::c_char,
+                file: loc.file.as_ptr() as *const sys::c_char,
                 line: loc.line,
                 color,
             },
@@ -141,12 +154,12 @@ impl<'a> SourceLocationData<'a> {
     }
 
     #[inline]
-    pub const fn with_color(loc: &SourceLocation<'a>, color: ColorType) -> Self {
+    pub const fn with_color(loc: &SourceLocation, color: ColorType) -> Self {
         Self {
             data: sys::source_location_data {
                 name: std::ptr::null(),
-                function: loc.function.as_ptr(),
-                file: loc.file.as_ptr(),
+                function: loc.function.as_ptr() as *const sys::c_char,
+                file: loc.file.as_ptr() as *const sys::c_char,
                 line: loc.line,
                 color,
             },
@@ -155,12 +168,12 @@ impl<'a> SourceLocationData<'a> {
     }
 
     #[inline]
-    pub const fn with_name(loc: &SourceLocation<'a>, name: &'a CStr) -> Self {
+    pub const fn with_name(loc: &SourceLocation, name: &'static str) -> Self {
         Self::with_name_and_color(loc, name, 0)
     }
 
     #[inline]
-    pub const fn without_name_or_color(loc: &SourceLocation<'a>) -> Self {
+    pub const fn without_name_or_color(loc: &SourceLocation) -> Self {
         Self::with_color(loc, 0)
     }
 }
